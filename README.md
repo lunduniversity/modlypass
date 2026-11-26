@@ -90,11 +90,7 @@ These are the decisions so far. They will be refined in `PRD.md`.
 
 ### Privacy and security
 
-- Logged: student id, time, model, GPU-seconds, token counts, queue wait, status. **Not logged:**
-  prompts, code, replies.
-- The model server listens only on `localhost` on the GPU node and is reached through the SSH
-  tunnel, so other cluster users cannot reach it.
-- The only exposed endpoint is the OpenAI-compatible API behind HTTPS.
+See [Security and privacy policy](#security-and-privacy-policy) below.
 
 ### Implementation
 
@@ -104,6 +100,76 @@ These are the decisions so far. They will be refined in `PRD.md`.
   startup. A database only when needed.
 - Lessons carried over from [modly](https://github.com/bjornregnell/modly): health checks that
   probe the backend, failures reported as failures, never an empty success.
+
+## Security and privacy policy
+
+This policy is a draft for the pilot, written so that the HPC centre can assess the service. It
+will be refined together with the centre.
+
+### Responsibility
+
+- One named person (the teacher running the gateway) holds the HPC account and is responsible for
+  the service towards the HPC centre.
+- Students are **indirect users**: they have no account at the HPC centre, no shell, no file
+  access and no access to the scheduler. The only thing they can reach is a chat-completion API.
+- Every request is traceable to one student through the gateway's log.
+
+### Access control, step by step
+
+| Stage | Who can use the model | How it is enforced |
+|---|---|---|
+| Iteration 0 (feasibility) | Only the teacher, on the gateway host | **Loopback-only relay** (below) |
+| Iteration 1 and later | Holders of a valid personal API key | Key check on every request, HTTPS |
+
+**Loopback-only relay.** Loopback is the address a computer uses to talk to itself (`127.0.0.1`
+or `::1`, also called `localhost`). Loopback traffic never leaves the machine, so a request that
+arrives from a loopback address was sent by a program on the gateway host itself. Until API keys
+exist, the gateway serves its public info page and health check to anyone, but relays requests
+under `/modlypass/v1/` **only** if they come from a loopback address. Everyone else gets
+`403 Forbidden`, and nothing reaches the HPC centre.
+
+Why this matters: without keys, the source address is the only access control. Bots scan the whole
+internet for open ports all the time, and exposed language-model servers are actively sought out
+and abused. An open relay would let strangers spend the HPC allocation, break the HPC centre's
+rules, and make performance measurements meaningless.
+
+The same principle applies at the HPC centre: the model server on the GPU node listens only on
+`localhost`, so other cluster users cannot reach it. The gateway reaches it through an SSH tunnel,
+which makes requests appear to come from loopback on the node. SSH login is therefore the access
+control on that side.
+
+**API keys** (from iteration 1). Every request must carry a personal key in the `Authorization`
+header; requests without a valid key get `401`. Only a hash of each key is stored. Keys can be
+revoked and reissued at any time. Keys never travel over plain HTTP: clients connect through HTTPS
+or an SSH tunnel.
+
+### Limiting misuse and cost
+
+- At most one request in flight per student (configurable), served through a fair queue.
+- A budget in GPU-seconds per student and period. When it is used up, requests are refused with a
+  clear message.
+- The model server runs only during agreed service hours, within the HPC project's allocation.
+
+### What is logged
+
+- **Logged:** student id (from the key), time, model, HTTP status, duration, queue wait,
+  GPU-seconds and token counts.
+- **Never logged or stored:** prompts, code, file contents, replies.
+- Logs stay on the gateway host and are used only to run the service, share GPU time fairly and
+  report usage to the HPC centre.
+
+### Exposure
+
+- The public surface is the gateway's HTTPS endpoint: an info page, a health check that reveals no
+  internal details, and the OpenAI-compatible API behind key checks.
+- The connection from the gateway to the HPC centre is an outgoing SSH tunnel. Nothing at the HPC
+  centre is exposed to the internet.
+
+### Reporting a security problem
+
+Please report security problems privately through GitHub's
+[security advisories](https://github.com/lunduniversity/modlypass/security/advisories/new) for
+this repository, not in a public issue.
 
 ## Related projects
 
