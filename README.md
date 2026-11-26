@@ -121,8 +121,9 @@ project ICCIS (Interactive Code Generation for Students at LTH).
 
 ## Roadmap
 
-- [ ] Write `PRD.md`: stakeholders, goals, features and acceptance targets, refining the decisions
-      above.
+- [x] Start [`PRD.md`](PRD.md) in reqT-lang: stakeholders, goals, releases (iteration 0, iteration
+      1, course pilot), features, tests and risks.
+- [ ] Iteration 0: bare-bones feasibility test (see `PRD.md`).
 - [ ] Manual end-to-end test: model on an HPC GPU node, SSH tunnel, OpenCode.
 - [ ] Slurm job script that publishes node name and port, plus job chaining.
 - [ ] Gateway v1: streaming relay, key check, per-student concurrency limit, usage log, `/health`.
