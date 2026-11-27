@@ -198,7 +198,7 @@ object Worker {
       val r = os.proc("ollama", "--version").call(check = false, mergeErrIntoOut = true)
       // Without a running server, ollama also prints a "could not connect" warning; keep the version line.
       val line = r.out.lines().find(_.contains("version")).getOrElse(r.out.text().trim)
-      Right(line.trim)
+      Right(line.trim.stripPrefix("Warning:").trim)
     catch case e: java.io.IOException => Left(s"ollama not found on PATH; run `module load ollama/<version>` first (${e.getMessage})")
 
   private def portFree(bind: Host, port: Port): Either[String, Unit] =

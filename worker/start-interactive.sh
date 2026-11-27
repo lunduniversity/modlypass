@@ -41,6 +41,7 @@ command -v projinfo >/dev/null && projinfo || true
 sinfo -p "gpua40,gpua100,gpua100i,$partition" || true
 
 echo "[start] account=$account partition=$partition time=$time module=$module repo=$repo"
-exec srun -A "$account" -p "$partition" --gres=gpu:1 -N 1 --ntasks-per-node=8 -t "$time" --pty \
+# One task with 8 cores: --ntasks-per-node=8 would start 8 copies of the worker.
+exec srun -A "$account" -p "$partition" --gres=gpu:1 -N 1 -n 1 --cpus-per-task=8 -t "$time" --pty \
   bash -lc 'module load "$1" && cd "$2" && shift 2 && exec scala run worker -- "$@"' \
   worker "$module" "$repo" "$@"
