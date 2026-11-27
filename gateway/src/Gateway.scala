@@ -3,7 +3,7 @@
 //
 //   scala run gateway -- [--port N] [--backend URL] [--config FILE]
 //
-// Settings: command line > config file (~/.config/modlypass/gateway.conf, KEY=value) > defaults.
+// Settings: command line > config file (~/.config/modlypass/settings.conf, KEY=value) > defaults.
 // Security (iteration 0): listens on 127.0.0.1 only, and the relay also refuses any non-loopback
 // client, so nobody but local users (and SSH tunnels) can spend the HPC allocation.
 
@@ -24,14 +24,20 @@ object Gateway {
 
   case class Settings(port: Port, backend: URI)
 
+  /** One settings file shared by all modlypass parts (KEY=value lines). */
   val defaultConfigFile: java.nio.file.Path =
-    java.nio.file.Path.of(System.getProperty("user.home"), ".config", "modlypass", "gateway.conf")
+    java.nio.file.Path.of(System.getProperty("user.home"), ".config", "modlypass", "settings.conf")
+
+  /** Tolerate shell-style quoting (KEY="value"), which java.util.Properties would keep as part of the value. */
+  def unquote(v: String): String =
+    val t = v.trim
+    if t.length >= 2 && (t.head == '"' || t.head == '\'') && t.last == t.head then t.substring(1, t.length - 1) else t
 
   val defaults: Map[String, String] = Map("PORT" -> "8099", "BACKEND" -> "http://127.0.0.1:11500")
 
   val usage: String =
     """usage: scala run gateway -- [--port N] [--backend URL] [--config FILE]
-      |  config file keys: PORT, BACKEND (default file ~/.config/modlypass/gateway.conf)""".stripMargin
+      |  config file keys: PORT, BACKEND (default file ~/.config/modlypass/settings.conf)""".stripMargin
 
   // ---------- pure core ----------
 
@@ -123,7 +129,7 @@ object Gateway {
         val p = java.util.Properties()
         scala.util.Using.resource(java.nio.file.Files.newBufferedReader(path))(p.load)
         import scala.jdk.CollectionConverters.*
-        Right(p.asScala.toMap)
+        Right(p.asScala.toMap.map((k, v) => k.trim -> unquote(v)))
       catch case e: java.io.IOException => Left(s"cannot read $path: ${e.getMessage}")
 
   private def serve(s: Settings): Unit =

@@ -48,6 +48,14 @@ class GatewayTest extends munit.FunSuite {
     assert(!isLoopback(InetAddress.getByName("192.0.2.10")))
   }
 
+  test("unquote strips matching shell quotes only") {
+    assertEquals(unquote("\"lu2026-7-155\""), "lu2026-7-155")
+    assertEquals(unquote("'x'"), "x")
+    assertEquals(unquote(" 8099 "), "8099")
+    assertEquals(unquote("\"half"), "\"half")
+    assertEquals(unquote("\""), "\"")
+  }
+
   test("health JSON reports ok or the reason, with escaping") {
     assert(healthJson(Right(()), 5).contains(""""status":"ok""""))
     val bad = healthJson(Left("say \"hi\"\n"), 5)
