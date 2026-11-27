@@ -35,6 +35,11 @@ if [[ -z "$account" ]]; then
   exit 1
 fi
 
+# Information only (no decisions here): usage before the run, and how busy the GPU partitions are.
+# Choosing a partition automatically is logic and belongs in Scala, not in this script.
+command -v projinfo >/dev/null && projinfo || true
+sinfo -p "gpua40,gpua100,gpua100i,$partition" || true
+
 echo "[start] account=$account partition=$partition time=$time module=$module repo=$repo"
 exec srun -A "$account" -p "$partition" --gres=gpu:1 -N 1 --ntasks-per-node=8 -t "$time" --pty \
   bash -lc 'module load "$1" && cd "$2" && shift 2 && exec scala run worker -- "$@"' \
