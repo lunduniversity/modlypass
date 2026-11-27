@@ -2,9 +2,11 @@
 
 OpenAI-compatible gateway to coding models on shared GPUs, with per-user keys and fair-share budgets.
 
-> **Status: design phase.** No code yet. This README is the design overview; a requirements
-> document (`PRD.md`) will follow. modlypass is a pilot at Lund University and **not** an official
-> university service.
+> **Status: early pilot.** A minimal viable gateway (MVG) works end to end: a terminal chat client,
+> the gateway and an Ollama worker on an HPC GPU node, connected by SSH tunnels, with streaming. No
+> API keys or multi-user features yet. This README is the design overview; requirements are in
+> [`PRD.md`](PRD.md). modlypass is a pilot at Lund University and **not** an official university
+> service.
 
 ## Why
 
@@ -178,6 +180,46 @@ this repository, not in a public issue.
 - [agaton](https://github.com/bjornregnell/agaton): manages several coding-agent accounts on the
   client side. A future agaton profile could point OpenCode at a modlypass key.
 
+## Try it: the minimal viable gateway (MVG)
+
+Three separate [scala-cli](https://scala-cli.virtuslab.org/) projects (Scala 3.10.1, JVM 21), each
+with munit tests (`scala-cli test <dir>`):
+
+| Directory | Runs on | What it does | Dependencies |
+|---|---|---|---|
+| `worker/` | HPC GPU node | Starts Ollama, checks the GPU, the port and the model, loads the model, reports how much of it is on the GPU, writes node and port to `~/.local/state/modlypass/worker.properties`, and prints the SSH tunnel command for the gateway host | os-lib, ujson |
+| `gateway/` | gateway host | Streams `/modlypass/v1/*` to an OpenAI-compatible backend; `/modlypass/health` probes the backend; one metadata log line per request; loopback-only | JDK only |
+| `client/` | your machine | Dumb terminal chat: reads prompts from stdin, keeps the conversation, prints the streamed reply and the time to first token (`/reset`, `/quit`) | ujson |
+
+Settings live in `~/.config/modlypass/settings.conf` (`KEY=value` lines), shared by all parts:
+
+```
+ACCOUNTNAME=<slurm-account>   # worker/start-interactive.sh (see: projinfo)
+PARTITION=gpua100i            # optional, default gpua40
+PORT=8099                     # gateway port (default 8099)
+BACKEND=http://127.0.0.1:11500  # gateway backend: the local end of the tunnel to the worker
+```
+
+Steps (the HPC side as at LUNARC COSMOS):
+
+1. **HPC login node:** clone the repo, run `scala compile worker` once (so dependencies are cached
+   in the shared home), then `worker/start-interactive.sh`. It prints `projinfo` and `sinfo`,
+   starts one Slurm task with 8 cores on a GPU node, loads the Ollama module and runs the worker.
+   The worker ends by printing the tunnel command.
+2. **Gateway host:** run that tunnel command (in tmux), then `scala run gateway`.
+   Check with `curl localhost:8099/modlypass/health`.
+3. **Your machine:** `ssh -N -L 8099:localhost:8099 <gateway-host>`, then `scala run client`.
+
+First measurements (qwen3-coder:30b, Q4_K_M, 64k context, one A100 40 GB):
+
+- 25 GB of GPU memory, 100% on the GPU, model load 9 s.
+- 47 tokens/s generation measured on the node; through the whole chain about 75 tokens/s and
+  0.5 s to the first token for a long answer.
+- Lesson: Slurm CPU binding matters. Eight one-core tasks instead of one eight-core task locked
+  Ollama to a single core and made it about 10× slower.
+- The model's code is good but not reliable: in a "many variants" answer, about half the variants
+  were wrong or did not compile. Students must compile and test what they get.
+
 ## First deployment
 
 The pilot runs at the Department of Computer Science, LTH, Lund University, for an elective course
@@ -189,10 +231,15 @@ project ICCIS (Interactive Code Generation for Students at LTH).
 
 - [x] Start [`PRD.md`](PRD.md) in reqT-lang: stakeholders, goals, releases (iteration 0, iteration
       1, course pilot), features, tests and risks.
-- [ ] Iteration 0: bare-bones feasibility test (see `PRD.md`).
-- [ ] Manual end-to-end test: model on an HPC GPU node, SSH tunnel, OpenCode.
-- [ ] Slurm job script that publishes node name and port, plus job chaining.
-- [ ] Gateway v1: streaming relay, key check, per-student concurrency limit, usage log, `/health`.
+- [x] MVG: worker, gateway and dumb chat client; round trip from a laptop through the gateway to a
+      model on an HPC GPU node, with streaming (2026-11-27).
+- [ ] Iteration 0: rest of the feasibility test (see `PRD.md`), including OpenCode as the client.
+- [x] Manual end-to-end test: model on an HPC GPU node, SSH tunnel, dumb client.
+- [ ] Same test with OpenCode (tool calls through the relay).
+- [ ] Slurm job script that publishes node name and port, plus job chaining (interactive start
+      script and info file done).
+- [ ] Gateway v1: key check and per-student concurrency limit (streaming relay, `/health` and the
+      metadata log are done).
 - [ ] Admin command: create keys from a course list and write the student messages.
 - [ ] Budgets in GPU-seconds and `GET /me`.
 - [ ] Tunnel manager that follows the Slurm job.
