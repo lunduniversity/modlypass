@@ -74,15 +74,17 @@ LUNARC has answered our policy and access questions. Iteration 1 starts when tho
   * Feature: perKeyConcurrency
   * Feature: fairQueue
   * Feature: perKeyUsage
+  * Feature: reverseWorker
+  * Feature: workerProtocol
+  * Feature: workerTokens
+  * Feature: httpsExposure
   * Test: twoClientsConcurrently
 
 * Release: coursePilot has
   * Gist: Ready for about 25 students in study period 3 (January to March 2027).
   * Feature: gpuSecondBudgets
   * Feature: meEndpoint
-  * Feature: tunnelManager
   * Feature: offlineMessage
-  * Feature: httpsExposure
   * Feature: studentMessages
   * Feature: multiBackend
   * Feature: gettingStartedPage
@@ -98,6 +100,7 @@ LUNARC has answered our policy and access questions. Iteration 1 starts when tho
 
 * Feature: personalTunnel has
   * Spec: From the gateway host, an SSH tunnel through the HPC login node makes the model server reachable on a local port. The teacher enters the 2FA code once; SSH connection reuse (ControlMaster) keeps it open.
+  * Comment: For iteration 0 only. Replaced by reverseWorker in iteration 1.
 
 * Feature: streamingRelay has
   * Spec: A minimal Scala 3 server on the JDK (built-in HTTP server and HttpClient, virtual threads, no web framework) that forwards every request under /modlypass/v1/ to the configured backend and passes streamed replies back chunk by chunk, unbuffered and unchanged.
@@ -120,8 +123,8 @@ LUNARC has answered our policy and access questions. Iteration 1 starts when tho
   * Spec: The backend base URL and the server's PORT are given on the command line or in a small config file, with a sensible default port. All endpoints live under the path prefix /modlypass so that a reverse proxy can map it without rewriting.
 
 * Feature: jobScript has
-  * Spec: An sbatch script that starts the model server on a GPU node and writes the node name and port to a file in project storage, so the tunnel can be pointed at it.
-  * Comment: Stretch goal for iteration 0. Real service runs use a batch partition (gpua100 or gpua100i at LUNARC).
+  * Spec: An sbatch script that starts the model server and the worker on a GPU node.
+  * Comment: Stretch goal for iteration 0. Real service runs use a batch partition (gpua100 or gpua100i at LUNARC). Choosing the partition from the current queue can be done in Scala in the worker rather than in bash.
 
 * Feature: vllmTrial has
   * Spec: The official vLLM image (pulled with Apptainer) serves the same model on a GPU node, and the relay works against it unchanged.
@@ -164,6 +167,27 @@ LUNARC has answered our policy and access questions. Iteration 1 starts when tho
 * Feature: perKeyUsage has
   * Spec: The metadata log records the key's owner, and usage can be summed per user.
 
+* Feature: reverseWorker has
+  * Spec: A worker in the GPU job opens a WebSocket connection from the HPC centre to the gateway and relays requests to the model server on the node's loopback. The gateway needs no login at the HPC centre and GPU nodes need no open ports. The worker reconnects with backoff when the connection is lost.
+  * Why: The SSH tunnel needs the teacher's 2FA on every reconnect and dies when the job ends. Suggested by the HPC centre.
+
+* Feature: workerProtocol has
+  * Spec: JSON messages over WebSocket as specified in PROTOCOL.md: one message type per direction, request ids, streamed chunks, cancel, heartbeat, close codes. Both sides share one Scala source for the messages.
+  * Comment: The gateway moves from the JDK HTTP server to Jetty 12 so that students' HTTP and workers' WebSocket share one server and one port.
+
+* Feature: workerTokens has
+  * Spec: A worker authenticates with a secret token in the Authorization header of the WebSocket upgrade. Only a hash is stored on the gateway. Workers are accepted only from the HPC centre's address ranges, and only over TLS.
+  * Why: A fake worker would receive students' prompts.
+
+* Feature: reverseWorker requires
+  * Feature: workerProtocol
+  * Feature: workerTokens
+  * Feature: httpsExposure
+* Feature: reverseWorker helps Goal: lowOperatingEffort
+* Feature: reverseWorker helps Goal: honestAvailability
+* Feature: reverseWorker helps Goal: policyCompliance
+* Feature: workerTokens helps Goal: privacy
+
 * Feature: perKeyConcurrency requires Feature: apiKeys
 * Feature: fairQueue requires Feature: perKeyConcurrency
 * Feature: perKeyUsage requires Feature: apiKeys
@@ -185,9 +209,6 @@ LUNARC has answered our policy and access questions. Iteration 1 starts when tho
 * Feature: meEndpoint has
   * Spec: GET /me shows a user their own usage and remaining budget.
 
-* Feature: tunnelManager has
-  * Spec: The gateway reads the node and port file written by the job script and moves the SSH tunnel when the job changes.
-
 * Feature: offlineMessage has
   * Spec: When no backend is up, clients get a clear reply such as "model offline, back at 08:00" instead of a timeout.
 
@@ -204,11 +225,9 @@ LUNARC has answered our policy and access questions. Iteration 1 starts when tho
   * Spec: A short page telling students how to install OpenCode and use their key.
 
 * Feature: gpuSecondBudgets requires Feature: perKeyUsage
-* Feature: tunnelManager requires Feature: jobScript
 * Feature: studentMessages requires Feature: adminKeyCommand
 
 * Feature: gpuSecondBudgets helps Goal: fairSharing
-* Feature: tunnelManager helps Goal: lowOperatingEffort
 * Feature: offlineMessage helps Goal: honestAvailability
 * Feature: studentMessages helps Goal: lowOperatingEffort
 
@@ -220,7 +239,11 @@ LUNARC has answered our policy and access questions. Iteration 1 starts when tho
 
 * Risk: twoFactorBlocksService has
   * Spec: The tunnel needs a 2FA code on every reconnect, so the service cannot stay up unattended.
-  * Comment: Mitigation asked for: a restricted service account without 2FA.
+  * Comment: Mitigation: reverseWorker, so only job submission needs 2FA.
+
+* Risk: sharedNodeExposure has
+  * Spec: On a GPU node shared with other users' jobs, other users can reach the model server on the node's loopback, because Ollama has no authentication.
+  * Comment: Mitigation to discuss with the HPC centre: an exclusive node, or vLLM with an API key.
 
 * Risk: allocationTooSmall has
   * Spec: Full-node charging on gpua100 gives about 208 GPU-hours a month, which may not cover service hours plus labs.
@@ -234,6 +257,9 @@ LUNARC has answered our policy and access questions. Iteration 1 starts when tho
 
 * Risk: studentUseNotAllowed hurts Goal: policyCompliance
 * Risk: twoFactorBlocksService hurts Goal: lowOperatingEffort
+* Risk: sharedNodeExposure hurts Goal: policyCompliance
+* Risk: sharedNodeExposure hurts Goal: privacy
+* Feature: reverseWorker hurts Risk: twoFactorBlocksService
 * Risk: allocationTooSmall hurts Goal: fairSharing
 * Risk: ollamaTooSlowForClass hurts Goal: studentsUseCodingModels
 * Risk: projectEndsBeforeCourse hurts Goal: studentsUseCodingModels

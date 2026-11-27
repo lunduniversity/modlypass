@@ -236,13 +236,16 @@ project ICCIS (Interactive Code Generation for Students at LTH).
 - [ ] Iteration 0: rest of the feasibility test (see `PRD.md`), including OpenCode as the client.
 - [x] Manual end-to-end test: model on an HPC GPU node, SSH tunnel, dumb client.
 - [ ] Same test with OpenCode (tool calls through the relay).
-- [ ] Slurm job script that publishes node name and port, plus job chaining (interactive start
-      script and info file done).
+- [x] Draft [`PROTOCOL.md`](PROTOCOL.md): the worker connects out from the HPC centre to the
+      gateway, JSON over WebSocket (suggested by LUNARC staff).
+- [ ] Review `PROTOCOL.md` (Björn; LUNARC staff welcome to comment).
+- [ ] Worker connection: shared protocol code, Jetty 12 in the gateway, worker tokens.
+- [ ] Slurm job script that starts the model server and the worker, plus job chaining
+      (interactive start script and info file done).
 - [ ] Gateway v1: key check and per-student concurrency limit (streaming relay, `/health` and the
       metadata log are done).
 - [ ] Admin command: create keys from a course list and write the student messages.
 - [ ] Budgets in GPU-seconds and `GET /me`.
-- [ ] Tunnel manager that follows the Slurm job.
 - [ ] Measure Ollama against vLLM under classroom load.
 - [ ] Getting-started page for students.
 - [ ] Pilot report after the course: GPU-hours per student, peak load, queue waits, feedback.
