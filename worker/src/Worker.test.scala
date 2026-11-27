@@ -24,6 +24,13 @@ class WorkerTest extends munit.FunSuite {
     assert(parseArgs(Seq("--help")).left.exists(_.startsWith("usage")))
   }
 
+  test("runtime files default to the state directory, outside any git clone") {
+    val s = Settings()
+    assert(s.logFile.toString.endsWith("/modlypass/ollama.log"))
+    assert(s.logFile.startsWith(stateDir) && s.infoFile.startsWith(stateDir))
+    assert(!s.logFile.startsWith(os.home / "modlypass"))
+  }
+
   test("ollama environment carries bind address, port and context length") {
     val env = ollamaEnv(Settings(bind = "0.0.0.0", port = 12000, contextLength = 4096))
     assertEquals(env("OLLAMA_HOST"), "0.0.0.0:12000")

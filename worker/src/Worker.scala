@@ -19,6 +19,10 @@ object Worker {
   type Port = Int
   type ModelName = String
 
+  /** Runtime files (log, info) go to the XDG state directory, never into a git clone such as ~/modlypass. */
+  def stateDir: os.Path =
+    sys.env.get("XDG_STATE_HOME").filter(_.startsWith("/")).map(os.Path(_)).getOrElse(os.home / ".local" / "state") / "modlypass"
+
   case class Settings(
     bind: Host = "127.0.0.1",
     port: Port = 11500,
@@ -26,8 +30,8 @@ object Worker {
     contextLength: Int = 65536,
     keepAlive: String = "1h",
     modelsDir: os.Path = os.home / ".ollama" / "models",
-    logFile: os.Path = os.home / "modlypass" / "ollama.log",
-    infoFile: os.Path = os.home / "modlypass" / "worker.properties",
+    logFile: os.Path = Worker.stateDir / "ollama.log",
+    infoFile: os.Path = Worker.stateDir / "worker.properties",
     loginHost: Host = "cosmos.lunarc.lu.se"
   )
 
@@ -39,8 +43,8 @@ object Worker {
       |  --ctx N            context length in tokens (default 65536)
       |  --keep-alive DUR   how long Ollama keeps the model loaded when idle (default 1h)
       |  --models-dir DIR   OLLAMA_MODELS (default ~/.ollama/models)
-      |  --log FILE         Ollama server log (default ~/modlypass/ollama.log)
-      |  --info FILE        where node and port are written (default ~/modlypass/worker.properties)
+      |  --log FILE         Ollama server log (default ~/.local/state/modlypass/ollama.log)
+      |  --info FILE        where node and port are written (default ~/.local/state/modlypass/worker.properties)
       |  --login-host HOST  HPC login node, used in the printed tunnel command (default cosmos.lunarc.lu.se)""".stripMargin
 
   // ---------- pure core ----------
